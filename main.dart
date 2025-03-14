@@ -1,21 +1,32 @@
 import 'package:flutter/material.dart';
+import 'sound_list_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-void main() {
-  runApp(const BirthdayCardApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final prefs = await SharedPreferences.getInstance();
+  final String? savedName = prefs.getString('user_name');
+  
+  runApp(BirthdayCardApp(initialName: savedName));
 }
 
 class BirthdayCardApp extends StatelessWidget {
-  const BirthdayCardApp({Key? key}) : super(key: key);
+  final String? initialName;
+  
+  const BirthdayCardApp({Key? key, this.initialName}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      home: Scaffold(
-        backgroundColor: const Color(0xFF59BFC6), // Teal Background
-        body: const BirthdayCard(),
-      ),
+      home: initialName == null 
+          ? const Scaffold(
+              backgroundColor: Color(0xFF59BFC6),
+              body: BirthdayCard(),
+            )
+          : SecondPage(userName: initialName!),
       routes: {
         '/second': (context) => const SecondPage(),
+        '/sound-list': (context) => const SoundListPage(),
       },
     );
   }
@@ -31,6 +42,11 @@ class BirthdayCard extends StatefulWidget {
 class _BirthdayCardState extends State<BirthdayCard> {
   final TextEditingController _nameController = TextEditingController();
   String _name = '';
+
+  Future<void> _saveName(String name) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('user_name', name);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -64,7 +80,7 @@ class _BirthdayCardState extends State<BirthdayCard> {
               TextField(
                 controller: _nameController,
                 decoration: const InputDecoration(
-                  labelText: 'Enter your name',
+                  labelText: 'Please enter your name',
                   border: OutlineInputBorder(),
                   filled: true,
                 ),
@@ -76,10 +92,23 @@ class _BirthdayCardState extends State<BirthdayCard> {
               ),
               const SizedBox(height: 10),
               ElevatedButton(
-                onPressed: () {
-                  Navigator.pushNamed(context, '/second');
+                onPressed: () async {
+                  if (_name.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please enter your name first')),
+                    );
+                    return;
+                  }
+                  await _saveName(_name);
+                  if (!mounted) return;
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => SecondPage(userName: _name),
+                    ),
+                  );
                 },
-                child: const Text('Go to Next Page'),
+                child: const Text('Go to Happy Eid Page'),
               ),
             ],
           ),
@@ -88,7 +117,7 @@ class _BirthdayCardState extends State<BirthdayCard> {
     );
   }
 
-  List<Widget> _buildConfetti() {
+  List<Widget> _buildConfetti() { // Group multiple widgets to create complex or dynamic UIs
     final confettiColors = [Colors.yellow, Colors.red, Colors.blue, Colors.pink];
     final positions = [
       const Offset(50, 50),
@@ -175,27 +204,43 @@ class _BirthdayCardState extends State<BirthdayCard> {
 }
 
 class SecondPage extends StatelessWidget {
-  const SecondPage({Key? key}) : super(key: key);
+  final String userName;
+  
+  const SecondPage({Key? key, this.userName = ''}) : super(key: key);
+
+  Future<void> _resetName(BuildContext context) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('user_name');
+    if (!context.mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const BirthdayCard()),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final List<Map<String, dynamic>> items = [
-      {'icon': Icons.home, 'name': 'Home'},
-      {'icon': Icons.person, 'name': 'Profile'},
-      {'icon': Icons.settings, 'name': 'Settings'},
-      {'icon': Icons.notifications, 'name': 'Notifications'},
-      {'icon': Icons.camera_alt, 'name': 'Camera'},
-      {'icon': Icons.message, 'name': 'Messages'},
-      {'icon': Icons.shopping_cart, 'name': 'Cart'},
-      {'icon': Icons.favorite, 'name': 'Favorites'},
-    ];
+    final String displayName = userName.isNotEmpty 
+        ? userName 
+        : (ModalRoute.of(context)?.settings.arguments as String? ?? '');
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Home page'),
+        title: const Text('Happy Eid'),
+        automaticallyImplyLeading: false, // This removes the back button
       ),
       body: Column(
         children: [
+          const SizedBox(height: 20),
+          Center(
+            child: Text(
+              'Happy Eid $displayName!',
+              style: const TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
           Image.network(
             'https://uploads.dailydot.com/2024/09/roblox-face-meme.jpg?q=65&auto=format&w=1200&ar=2:1&fit=crop',
             width: double.infinity,
@@ -215,32 +260,16 @@ class SecondPage extends StatelessWidget {
               return const Center(child: Text('Failed to load image'));
             },
           ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: ListView.builder(
-              itemCount: items.length,
-              itemBuilder: (context, index) {
-                final item = items[index];
-                return ListTile(
-                  leading: Icon(item['icon'], color: Colors.blue),
-                  title: Text(item['name']),
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('${item['name']} clicked')),
-                    );
-                  },
-                );
-              },
-            ),
+          const SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pushNamed(context, '/sound-list');
+            },
+            child: const Text('Go to Sound List'),
           ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: const Text('Back to First Page'),
-            ),
+          ElevatedButton(
+            onPressed: () => _resetName(context),
+            child: const Text('Reset Name'),
           ),
         ],
       ),
